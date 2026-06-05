@@ -86,12 +86,26 @@ export interface BlogSystemDeps {
     input: BlogImageMaterializeInput,
   ) => Promise<BlogImageMaterializeResult>;
   projectStore?: BlogProjectStore;
+  /**
+   * Optional host-injected resolver for connectors registered OUT-OF-BAND via the
+   * capability registry — a hot-installed vendor connector self-registers through
+   * `ctx.capabilities.registerProvider("blog-connector", …)` rather than the
+   * host naming its scope. Pulled LAZILY by the registry on every read, so a
+   * teardown is reflected immediately and nothing is copied/cached. The host wires
+   * it from `resolveCapabilityProviders("blog-connector")` in
+   * src/lib/register-blog-providers.ts.
+   */
+  resolveConnectorProviders?: () => readonly BlogConnector[];
 }
 
 let _deps: BlogSystemDeps | null = null;
 
 export function configureBlogSystem(deps: BlogSystemDeps): void {
   _deps = deps;
+  // Forward the optional capability-provider resolver to the registry so BOTH
+  // read paths merge host-injected connectors lazily: `get(id)` (via getProvider)
+  // and `listAll()` (via listInstalledBlogConnectors).
+  blogConnectorRegistry.setExternalResolver(deps.resolveConnectorProviders ?? null);
 }
 
 function getDeps(): BlogSystemDeps {
