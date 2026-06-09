@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+# Extracted extension repos ship no committed lockfile (CI installs with --no-frozen-lockfile).
+pnpm-lock.yaml
+package-lock.json
+
+# Build output (tsc outDir)
+dist/
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+
+# Logs
+*.log
+
+# Env files & secrets
+.env
+.env.*
+
+# Packed tarballs (`npm pack`)
+*.tgz
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
