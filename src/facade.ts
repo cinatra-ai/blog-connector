@@ -5,7 +5,7 @@ import "server-only";
 //
 // The facade is the single chokepoint every WordPress publish goes through:
 //
-//   asset-blog wordpress.ts → buildBlogDraftPayloadThroughSystem(input, opts)
+//   the host application → buildBlogDraftPayloadThroughSystem(input, opts)
 //     → resolveConnectorId(blogConnectorIdHint, ...)
 //     → delegate to connector.buildDraftPayload(input)
 //     → return {createPayload, postMeta?}
@@ -40,9 +40,9 @@ export type BlogImageMaterializeResult = {
 
 /**
  * Operational metadata + artifact-ref operations on a blog project, exposed
- * to the facade so it never has to import `@cinatra-ai/asset-blog` directly.
+ * to the facade so it never has to import host-side blog modules directly.
  * Narrow on purpose: future `blog_project_*` / `blog_post_update` primitives
- * can widen this as they fold from asset-blog into the facade.
+ * can widen this as more blog capabilities migrate into the facade.
  * No content bytes — refs only; image artifacts are canonical.
  */
 export type BlogProjectSummary = {
@@ -138,7 +138,7 @@ function getProvider(id: string): BlogConnector {
 /**
  * Build the create-draft payload + optional postMeta for a single blog post.
  *
- * Calling convention: the host (`packages/asset-blog/src/wordpress.ts`)
+ * Calling convention: the host application
  * fetches `latestPublishedPost` + uploads `featuredMedia`, then calls this
  * with `{instanceBlogConnectorId: instance.blogConnectorId}` so the routing
  * chain can pick the right connector for the instance.
