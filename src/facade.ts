@@ -98,10 +98,16 @@ export interface BlogSystemDeps {
   resolveConnectorProviders?: () => readonly BlogConnector[];
 }
 
-let _deps: BlogSystemDeps | null = null;
+// CROSS-COMPILATION SINGLETON (transport-registration cutover): the deps slot configured at activation
+// (instrumentation compilation) must be visible to the route/RSC compilation
+// that calls the facade. Anchor on a namespaced+versioned `Symbol.for(...)`
+// key (matches the email/social facade deps slots).
+const BLOG_SYSTEM_DEPS_KEY = Symbol.for("@cinatra-ai/blog-connector:facade-deps/v1");
+type BlogDepsHolder = { [k: symbol]: BlogSystemDeps | null | undefined };
+const _depsHolder = globalThis as unknown as BlogDepsHolder;
 
 export function configureBlogSystem(deps: BlogSystemDeps): void {
-  _deps = deps;
+  _depsHolder[BLOG_SYSTEM_DEPS_KEY] = deps;
   // Forward the optional capability-provider resolver to the registry so BOTH
   // read paths merge host-injected connectors lazily: `get(id)` (via getProvider)
   // and `listAll()` (via listInstalledBlogConnectors).
@@ -109,11 +115,12 @@ export function configureBlogSystem(deps: BlogSystemDeps): void {
 }
 
 function getDeps(): BlogSystemDeps {
+  const _deps = _depsHolder[BLOG_SYSTEM_DEPS_KEY] ?? null;
   if (!_deps) {
     throw new Error(
       "@cinatra-ai/blog-connector: blog system not configured. " +
-        "Call configureBlogSystem(deps) at boot (typically from " +
-        "src/lib/register-blog-providers.ts).",
+        "The facade configures itself at serverEntry activation " +
+        "(register(ctx) → configureBlogSystem).",
     );
   }
   return _deps;

@@ -75,7 +75,15 @@ class BlogConnectorRegistryImpl {
   }
 }
 
-export const blogConnectorRegistry = new BlogConnectorRegistryImpl();
+// CROSS-COMPILATION SINGLETON (transport-registration cutover): anchor on globalThis so every Next.js
+// compilation in the same Node process shares one registry instance (same
+// hazard + fix as the email/social connector registries).
+const BLOG_CONNECTOR_REGISTRY_KEY = Symbol.for("@cinatra-ai/blog-connector:registry/v1");
+type RegistryHolder = { [k: symbol]: BlogConnectorRegistryImpl | undefined };
+const _globalHolder = globalThis as unknown as RegistryHolder;
+export const blogConnectorRegistry: BlogConnectorRegistryImpl =
+  _globalHolder[BLOG_CONNECTOR_REGISTRY_KEY] ??
+  (_globalHolder[BLOG_CONNECTOR_REGISTRY_KEY] = new BlogConnectorRegistryImpl());
 
 export function registerBlogConnector(connector: BlogConnector): void {
   blogConnectorRegistry.register(connector);
