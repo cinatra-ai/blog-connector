@@ -34,7 +34,8 @@
     "dependencies": [],
     "serverEntry": "./register",
     "requestedHostPorts": [
-      "mcp"
+      "mcp",
+      "capabilities"
     ],
     "sdkAbiRange": "^2"
   }
