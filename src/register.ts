@@ -26,10 +26,13 @@ import type {
 import { listInstalledBlogConnectors, registerBlogConnector, blogConnectorRegistry } from "./registry";
 import {
   configureBlogSystem,
+  buildBlogDraftPayloadThroughSystem,
+  materializeBlogImageThroughSystem,
   type BlogImageMaterializeInput,
   type BlogImageMaterializeResult,
   type BlogProjectStore,
 } from "./facade";
+import { getWordPressContentConverter } from "./legacy-converter-registry";
 import { defaultBlogConnector } from "./default-connector";
 import type { BlogConnector } from "./contract";
 
@@ -109,6 +112,27 @@ export function register(ctx: ExtensionHostContext): void {
         .filter(isBlogConnector),
   });
   registerBlogConnector(defaultBlogConnector);
+
+  // Lazy/guarded host-access cutover: the host's blog surfaces
+  // (src/lib/blog/*) resolve the facade entry points through the capability
+  // registry instead of value-importing this package. The impls delegate to
+  // the SAME facade functions configured above; provider absence degrades the
+  // host features per call (draft build / image materialization fail with a
+  // descriptive error; the WP content-convert primitive falls back to its
+  // existing passthrough result).
+  ctx.capabilities.registerProvider("blog-system", {
+    packageName: PACKAGE_NAME,
+    impl: {
+      buildDraftPayload: (
+        input: Parameters<typeof buildBlogDraftPayloadThroughSystem>[0],
+        opts: Parameters<typeof buildBlogDraftPayloadThroughSystem>[1],
+      ) => buildBlogDraftPayloadThroughSystem(input, opts),
+      materializeBlogImage: (input: BlogImageMaterializeInput) =>
+        materializeBlogImageThroughSystem(input),
+      getWordPressContentConverter: (wordpressInstanceId: string) =>
+        getWordPressContentConverter(wordpressInstanceId) ?? null,
+    },
+  });
 
   ctx.mcp.registerTool({
     name: "blog_connector_list",
