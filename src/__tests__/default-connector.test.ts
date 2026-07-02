@@ -75,3 +75,69 @@ describe("defaultBlogConnector.buildDraftPayload (generic, no injection)", () =>
     expect(result.postMeta).toBeUndefined();
   });
 });
+
+// The generic markdown->HTML converter must emit ONLY its own generated markup.
+// LLM-drafted markdown is untrusted: any HTML tag / attribute in the source must
+// be neutralized (escaped as text) so a `unfiltered_html`-capable WordPress
+// account cannot receive a stored-XSS payload verbatim.
+describe("defaultBlogConnector.buildDraftPayload (output escaping / XSS)", () => {
+  async function render(markdown: string): Promise<string> {
+    const result = await defaultBlogConnector.buildDraftPayload({
+      postTitle: "T",
+      postExcerpt: "",
+      blogPostContent: markdown,
+    });
+    return result.createPayload.content ?? "";
+  }
+
+  it("neutralizes a <script> line (no raw passthrough)", async () => {
+    const html = await render("<script>alert(document.cookie)</script>");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("neutralizes an <img onerror> payload inside a paragraph", async () => {
+    const html = await render("Look here <img src=x onerror=alert(1)> ok");
+    // The whole tag is inert text — never a live <img> element. `onerror=`
+    // survives only inside the escaped `&lt;…&gt;` run, so it is not an attribute.
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+  });
+
+  it("neutralizes an <iframe> line", async () => {
+    const html = await render('<iframe src="https://evil.example"></iframe>');
+    expect(html).not.toContain("<iframe");
+    expect(html).toContain("&lt;iframe");
+  });
+
+  it("cannot break out of the generated href attribute", async () => {
+    // A crafted link whose URL contains a double-quote must not inject a new
+    // (event-handler) attribute: the `"` is escaped BEFORE the href is built,
+    // so it stays INSIDE the double-quoted href value.
+    const html = await render(
+      '[click](https://evil.example"onmouseover="alert(1))',
+    );
+    // No raw double-quote breakout — the injected quotes became entities.
+    expect(html).not.toContain('evil.example"');
+    expect(html).toContain("evil.example&quot;");
+    // No live `on*="` event-handler attribute leaked out of the value.
+    expect(html).not.toMatch(/\son[a-z]+="/i);
+  });
+
+  it("escapes a bare ampersand and angle brackets in prose", async () => {
+    const html = await render("Tom & Jerry say a < b and c > d");
+    expect(html).toContain("Tom &amp; Jerry");
+    expect(html).toContain("a &lt; b");
+    expect(html).toContain("c &gt; d");
+  });
+
+  it("still renders legitimate markdown (bold, heading, code, https link)", async () => {
+    const html = await render(
+      "## Title\n\nA **bold** and `code` line with a [link](https://ok.example).",
+    );
+    expect(html).toContain("<h4>Title</h4>");
+    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain("<code>code</code>");
+    expect(html).toContain('<a href="https://ok.example">link</a>');
+  });
+});
