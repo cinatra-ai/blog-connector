@@ -22,8 +22,29 @@ import type {
   BlogDraftPayload,
 } from "./contract";
 
-function applyInlineMarkdown(value: string) {
+// Escape the five HTML-significant characters so any markup in the source text
+// becomes inert text. `&` MUST be replaced first (otherwise the entities this
+// emits would be double-encoded). `"` is escaped because the only attribute the
+// converter emits — the link `href="…"` — is double-quoted, so an escaped `"`
+// can never break out of it.
+function escapeHtml(value: string) {
   return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// The converter owns ALL emitted markup. Untrusted source text is HTML-escaped
+// FIRST, then the inline-markdown regexes run over the escaped text — so the
+// ONLY tags in the output are the ones this function generates (`<code>`,
+// `<strong>`, `<em>`, `<a>`). The markdown delimiters (`` ` ``, `*`, `_`, `[`,
+// `]`, `(`, `)`) are not escaped, so they still drive the transforms; the link
+// target is restricted to `http(s)://…` by the regex (no `javascript:`), and
+// because the source was escaped first, an injected `"` in the URL is already
+// `&quot;` and cannot terminate the `href` attribute.
+function applyInlineMarkdown(value: string) {
+  return escapeHtml(value)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
@@ -93,12 +114,11 @@ function convertMarkdownToHtml(markdown: string) {
       orderedItems.push(orderedMatch[1].trim());
       continue;
     }
-    if (line.startsWith("<") && line.endsWith(">")) {
-      flushParagraph();
-      flushList();
-      parts.push(line);
-      continue;
-    }
+    // NO raw-HTML passthrough. A markdown line that looks like an HTML element
+    // (`<script>…`, `<iframe>…`) is treated as ordinary paragraph text and is
+    // HTML-escaped by applyInlineMarkdown — the converter emits only its own
+    // generated markup. A site that must emit raw HTML sets `contentIsHtml`,
+    // which bypasses this converter entirely.
     flushList();
     paragraph.push(line);
   }
