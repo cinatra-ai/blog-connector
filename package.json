@@ -41,6 +41,7 @@
       "name": "Cinatra"
     },
     "displayName": "Blog",
+    "logo": "./cinatra/logo.svg",
     "dependencies": [],
     "serverEntry": "./register",
     "requestedHostPorts": [
